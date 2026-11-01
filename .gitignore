@@ -1,6 +1,3 @@
 data/
 *.duckdb
-.DS_STORE
-data/
-*.duckdb
-.DS_STORE
+.DS_Store
