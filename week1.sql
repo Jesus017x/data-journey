@@ -60,3 +60,20 @@ WITH delivered_orders AS (
 SELECT
     ROUND(100.0 * AVG(is_late), 1) AS pct_late_deliveries
 FROM delivered_orders;
+
+
+-- Q5: Most common payment_type is credit_card with over 76000 instances, which is ~74% of all payment records.
+-- The average payment_value for credit_card is R$163.32 which is the highest amongst all payment_type.
+-- Vouchers had the lowest average payment value (R$65.70). 
+-- not_defined had R$0.0 recorded across 3 payments, likely to be bad data.
+-- Vouchers had ~5800 payments across ~3900 orders, which indicates that clients split orders across multiple vouchers.
+
+SELECT
+    payment_type,
+    COUNT(DISTINCT order_id) AS order_count,
+    COUNT(*) AS payment_count,
+    ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM payments), 1) AS pct_of_payments,
+    ROUND(AVG(payment_value), 2) AS avg_payment_value
+FROM payments
+GROUP BY payment_type
+ORDER BY payment_count DESC;
