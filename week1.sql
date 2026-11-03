@@ -38,3 +38,25 @@ SELECT
     ROUND(MEDIAN(days_to_deliver), 1) AS median_days_to_deliver,
     MAX(days_to_deliver) AS slowest_order_to_deliver
 FROM delivered_orders;
+
+
+-- Q4: Share of orders delivered after the estimated delivery date is ~6.8%.
+-- "Late" = delivered on a later calendar day than estimated.
+-- (Same day delivery counts as on time).
+-- Only delivered orders with both dates recorded were taken into account.
+
+WITH delivered_orders AS (
+    SELECT
+        order_id,
+        CASE
+            WHEN order_delivered_customer_date::DATE > order_estimated_delivery_date::DATE THEN 1
+            ELSE 0
+        END AS is_late
+    FROM orders
+    WHERE order_status = 'delivered'
+        AND order_delivered_customer_date IS NOT NULL
+        AND order_estimated_delivery_date IS NOT NULL
+)
+SELECT
+    ROUND(100.0 * AVG(is_late), 1) AS pct_late_deliveries
+FROM delivered_orders;
