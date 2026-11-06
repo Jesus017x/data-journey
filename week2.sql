@@ -35,3 +35,34 @@ WHERE o.order_status = 'delivered'
 GROUP BY category_name
 ORDER BY revenue DESC
 LIMIT 10;
+
+-- Q3: Maranhao is the state with the highest late delivery rate with ~17% of its deliveries being late,
+-- which is about 2.5x the national rate (~6.8%).
+-- Ceara (~14%), Bahia (~12%), Rio de Janeiro (~12%) and Para (~11%) close the top 5.
+-- The states in the top 5 (aside from Rio de Janeiro) are in the North/Northeast with a lower order volume
+-- and far from where most orders are concentrated (South/Southeast). 
+-- States with fewer than 500 orders delivered were ignored due to small sample sizes producing unreliable rates.
+
+WITH orders_delivered AS (
+    SELECT
+        order_id,
+        customer_id,
+        CASE 
+            WHEN order_delivered_customer_date::DATE > order_estimated_delivery_date::DATE THEN 1
+            ELSE 0
+        END AS is_late
+    FROM orders 
+    WHERE order_status = 'delivered'
+        AND order_delivered_customer_date IS NOT NULL
+        AND order_estimated_delivery_date IS NOT NULL
+)
+SELECT
+    c.customer_state,
+    COUNT(*) AS delivered_orders,
+    ROUND(100.0 * AVG(od.is_late), 1) AS late_delivery_rate
+FROM orders_delivered AS od
+LEFT JOIN customers AS c
+    ON od.customer_id = c.customer_id
+GROUP BY c.customer_state
+HAVING COUNT(*) >= 500
+ORDER BY late_delivery_rate DESC;
