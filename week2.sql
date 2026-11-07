@@ -66,3 +66,55 @@ LEFT JOIN customers AS c
 GROUP BY c.customer_state
 HAVING COUNT(*) >= 500
 ORDER BY late_delivery_rate DESC;
+
+-- Q4: Late deliveries (n = 6381) average 2.3 vs 4.3 for on-time deliveries (n = 89443).
+-- This is 2 points lower on a 1-5 scale.
+-- Review scores were averaged per order (verified: 1 row per order). 
+-- Delivered orders without a review were excluded (INNER join).
+-- An order is considered as "late" if it was delivered after the estimated delivery date.
+-- Same day delivery or before, are considered as orders being delivered "on time".
+-- On-time deliveries get a 1-star review score on ~7% of delivered orders; late deliveries on ~54% of delivered orders.
+
+WITH order_reviews AS (
+    SELECT 
+        order_id,
+        AVG(review_score) AS review_score
+    FROM reviews
+    GROUP BY order_id
+),
+orders_delivered AS (
+    SELECT
+        o.order_id,
+        CASE
+            WHEN o.order_delivered_customer_date::DATE <= o.order_estimated_delivery_date::DATE THEN orv.review_score
+            ELSE NULL
+        END AS on_time_delivery_rscore,
+        CASE 
+            WHEN o.order_delivered_customer_date::DATE > o.order_estimated_delivery_date::DATE THEN orv.review_score
+            ELSE NULL
+        END AS late_delivery_rscore,
+        CASE
+            WHEN o.order_delivered_customer_date::DATE <= o.order_estimated_delivery_date::DATE 
+            AND orv.review_score <= 1 THEN orv.review_score
+            ELSE NULL
+        END AS on_time_one_star_rscore,
+        CASE
+            WHEN o.order_delivered_customer_date::DATE > o.order_estimated_delivery_date::DATE 
+            AND orv.review_score <= 1 THEN orv.review_score
+            ELSE NULL
+        END AS late_one_star_rscore
+    FROM orders AS o
+    INNER JOIN order_reviews AS orv 
+        ON o.order_id = orv.order_id
+    WHERE o.order_status = 'delivered'
+        AND o.order_delivered_customer_date IS NOT NULL
+        AND o.order_estimated_delivery_date IS NOT NULL
+)
+SELECT
+    COUNT(on_time_delivery_rscore) AS on_time_orders,
+    COUNT(late_delivery_rscore) AS late_orders,
+    ROUND(AVG(on_time_delivery_rscore), 1) AS avg_on_time,
+    ROUND(AVG(late_delivery_rscore), 1) AS avg_late,
+    ROUND(100.0 * COUNT(on_time_one_star_rscore) / COUNT(on_time_delivery_rscore), 1) AS pct_on_time_one_star,
+    ROUND(100.0 * COUNT(late_one_star_rscore) / COUNT(late_delivery_rscore), 1) AS pct_late_one_star
+FROM orders_delivered;
