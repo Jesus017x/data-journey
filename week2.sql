@@ -13,6 +13,7 @@ GROUP BY c.customer_state
 ORDER BY order_count DESC
 LIMIT 10;
 
+
 -- Q2: Health beauty, watches gifts and bed bath tables are the top 3 product categories by revenue,
 -- all exceeding R$1,000,000. Overall, top 10 categories make up ~62% of delivered revenue.
 -- Revenue is the sum of items sold from orders that were delivered.
@@ -35,6 +36,7 @@ WHERE o.order_status = 'delivered'
 GROUP BY category_name
 ORDER BY revenue DESC
 LIMIT 10;
+
 
 -- Q3: Maranhao is the state with the highest late delivery rate with ~17% of its deliveries being late,
 -- which is about 2.5x the national rate (~6.8%).
@@ -66,6 +68,7 @@ LEFT JOIN customers AS c
 GROUP BY c.customer_state
 HAVING COUNT(*) >= 500
 ORDER BY late_delivery_rate DESC;
+
 
 -- Q4: Late deliveries (n = 6381) average 2.3 vs 4.3 for on-time deliveries (n = 89443).
 -- This is 2 points lower on a 1-5 scale.
@@ -118,3 +121,42 @@ SELECT
     ROUND(100.0 * COUNT(on_time_one_star_rscore) / COUNT(on_time_delivery_rscore), 1) AS pct_on_time_one_star,
     ROUND(100.0 * COUNT(late_one_star_rscore) / COUNT(late_delivery_rscore), 1) AS pct_late_one_star
 FROM orders_delivered;
+
+
+-- Q5: ~0.8% (n = 768) of all orders (n = 99441) have no reviews at all. 646 of the 768 (84%) are delivered orders.
+-- This matches the 646 orders that were dropped in Q4.
+-- Canceled orders lack a review 3.2% of the time vs ~0.7% for delivered.
+-- (created shows 40%, but n = 5, too small to be meaningful.)
+-- A 'no review order' is an order where no review record was registered.
+
+WITH reviewed_orders AS (
+    SELECT DISTINCT order_id
+    FROM reviews
+)
+SELECT 
+    o.order_status,
+    COUNT(*) AS total_orders,
+    SUM(CASE WHEN r.order_id IS NULL THEN 1 ELSE 0 END) AS orders_without_reviews,
+    ROUND(100.0 * AVG(CASE WHEN r.order_id IS NULL THEN 1 ELSE 0 END), 1) AS pct_without_reviews
+FROM orders AS o
+LEFT JOIN reviewed_orders AS r 
+    ON o.order_id = r.order_id
+GROUP BY o.order_status
+ORDER BY total_orders DESC;
+
+
+-- Reflection: Why joining payments to order_items gives the wrong revenue?
+-- Payments has 1 row per payment and order_items 1 row per item, so both are multiple per order.
+-- Joining them on order_id repeats each payment once per item in its order
+-- (and payments can be split, so we could have 2 payments * 3 items = 6 rows)
+-- Measured: the joined total was ~R$4.3M (~26.9%) higher than the real payment total.
+-- Fix: aggregate each table to one row per order first, then join.
+
+SELECT ROUND(100.0 * (
+    (SELECT SUM(pay.payment_value) FROM payments AS pay
+    INNER JOIN order_items AS oi 
+    ON pay.order_id = oi.order_id)
+    -
+    (SELECT SUM(payment_value) FROM payments)) 
+    / 
+    (SELECT SUM(payment_value) FROM payments), 1) AS pct_inflated;
