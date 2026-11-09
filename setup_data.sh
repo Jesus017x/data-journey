@@ -31,6 +31,9 @@ SELECT * FROM read_csv_auto('data/olist/product_category_name_translation.csv');
 CREATE OR REPLACE TABLE reviews AS
 SELECT * FROM read_csv_auto('data/olist/olist_order_reviews_dataset.csv');
 
+CREATE OR REPLACE TABLE sellers AS
+SELECT * FROM read_csv_auto('data/olist/olist_sellers_dataset.csv');
+
 
 -- 3. Print row counts to confirm it worked
 SELECT
@@ -40,6 +43,7 @@ SELECT
     (SELECT COUNT(*) FROM order_items) AS order_items,
     (SELECT COUNT(*) FROM products) AS products,
     (SELECT COUNT(*) FROM category_translation) AS category_translation,
-    (SELECT COUNT(*) FROM reviews) AS reviews
+    (SELECT COUNT(*) FROM reviews) AS reviews,
+    (SELECT COUNT(*) FROM sellers) AS sellers
 ;
 SQL
