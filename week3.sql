@@ -41,6 +41,36 @@ SELECT
 FROM revenue_with_prev AS rwp
 ORDER BY rwp.order_month;
 
+-- Q2: In November 2017, the cumulative revenue for the year passed the R$5 million mark (R$5,236,868.82).
+-- Between October and November 2017, the running total went up by ~R$1 million,
+-- because November's revenue alone was ~R$988k. Monthly revenue from October to November increased by ~52%.
+-- Without Black Friday: end of October was ~R$4.2M; a typical November (October's ~R$650k)
+-- would have reached ~R$4.9M, and December (~R$730k) would have passed R$5M.
+-- So we can conclude that Black Friday brought the milestone forward by about one month.
+
+WITH delivered_orders AS (
+    SELECT
+        order_id,
+        date_trunc('month', order_purchase_timestamp)::DATE AS order_month
+    FROM orders
+    WHERE order_status = 'delivered'
+        AND order_purchase_timestamp >= DATE '2017-01-01'
+        AND order_purchase_timestamp < DATE '2018-01-01'
+),
+revenue_data AS (
+    SELECT
+        dlv.order_month AS order_month,
+        SUM(oi.price) AS revenue
+    FROM delivered_orders AS dlv 
+    INNER JOIN order_items AS oi
+        ON dlv.order_id = oi.order_id
+    GROUP BY order_month
+)
+SELECT
+    order_month,
+    ROUND(SUM(revenue) OVER (ORDER BY order_month), 2) AS running_revenue
+FROM revenue_data
+ORDER BY order_month;
 
 
 
