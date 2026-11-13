@@ -72,5 +72,48 @@ SELECT
 FROM revenue_data
 ORDER BY order_month;
 
+-- Q3: In 2017 and 2018, Bed Bath Tables, Watches Gifts and Health Beauty have stayed as the top 3 categories by revenue.
+-- Bed Bath Tables was top 1 in 2017. In 2018 Health Beauty became the top 1 category.
+-- Watches Gifts has stayed as the top 2 category in 2017 and 2018.
+-- NOTE: 2018 only covers Jan-Aug, so revenue totals aren't directly comparable with 2017;
+-- shares of each year's revenue are. Health Beauty and Watches Gifts gained share; Bed Bath Tables lost share.
+-- RANK was used instead of ROW_NUMBER to avoid excluding categories in case of a potential tie in revenue (no ties occurred).
+-- 2016 was excluded due to incomplete data and a gap between October and December.
+-- 2018 was included until August, since data from September and October is incomplete.
 
-
+WITH category_revenue AS (
+    SELECT 
+        date_trunc('year', o.order_purchase_timestamp)::DATE AS order_year,
+        COALESCE(ct.product_category_name_english, p.product_category_name, 'unknown') AS category_name,
+        SUM(oi.price) AS revenue
+    FROM order_items AS oi
+    LEFT JOIN products AS p 
+        ON oi.product_id = p.product_id
+    LEFT JOIN category_translation AS ct 
+        ON p.product_category_name = ct.product_category_name
+    INNER JOIN orders AS o
+        ON oi.order_id = o.order_id
+    WHERE o.order_status = 'delivered'
+        AND o.order_purchase_timestamp >= DATE '2017-01-01'
+        AND o.order_purchase_timestamp < DATE '2018-09-01'
+    GROUP BY order_year, category_name
+),
+ranked AS (
+    SELECT 
+        *,
+        ROUND(100.0 * revenue / SUM(revenue) OVER (PARTITION BY order_year), 1) AS pct_of_revenue,
+        RANK() OVER (
+            PARTITION BY order_year
+            ORDER BY revenue DESC
+        ) AS rnk
+    FROM category_revenue
+)
+SELECT
+    year(order_year) AS order_year,
+    rnk AS category_rank,
+    category_name,
+    ROUND(revenue, 2) AS revenue,
+    pct_of_revenue
+FROM ranked
+WHERE rnk <= 3
+ORDER BY order_year, category_rank;
