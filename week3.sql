@@ -117,3 +117,49 @@ SELECT
 FROM ranked
 WHERE rnk <= 3
 ORDER BY order_year, category_rank;
+
+-- Q4: ~3.00% of customers placed a second delivered order. 
+-- ~29.6% of these second orders came on the same day as the first (likely split purchases).
+-- Counting only later day returns, ~2.11% of customers placed a second order.
+-- The median time between the first and second order was 75 days (29 if same-day orders are included).
+-- This share was verified against a per-customer order count.
+-- Only delivered orders were chosen, since a "cancel then re-order" cannot be considered as a repeat customer.
+
+WITH check_orders AS (
+    SELECT
+        c.customer_unique_id,
+        o.order_purchase_timestamp,
+        ROW_NUMBER() OVER (PARTITION BY c.customer_unique_id ORDER BY o.order_purchase_timestamp) AS order_num,
+        LAG(o.order_purchase_timestamp) OVER (PARTITION BY c.customer_unique_id 
+        ORDER BY o.order_purchase_timestamp) AS prev_purchase
+    FROM orders AS o 
+    INNER JOIN customers AS c 
+        ON o.customer_id = c.customer_id
+    WHERE o.order_status = 'delivered'
+)
+SELECT
+    ROUND(COUNT(DISTINCT CASE WHEN order_num = 2 
+                THEN customer_unique_id END) * 100.0
+        / COUNT(DISTINCT customer_unique_id), 2) AS share,
+    ROUND(MEDIAN(
+        CASE WHEN order_num = 2
+            AND date_diff('day', prev_purchase, order_purchase_timestamp) > 0
+            THEN date_diff('day', prev_purchase, order_purchase_timestamp) 
+            END), 2) AS median_days_to_second_order,    
+    ROUND(MEDIAN(
+                CASE WHEN order_num = 2 
+                THEN date_diff('day', prev_purchase, order_purchase_timestamp) 
+                END), 2) AS median_incl_same_day_orders,
+    SUM(CASE WHEN order_num = 2 
+            AND date_diff('day', prev_purchase, order_purchase_timestamp) = 0 
+            THEN 1 ELSE 0 END) AS same_day_second_orders,
+    ROUND(100.0 * 
+            SUM(CASE WHEN order_num = 2 
+                    AND date_diff('day', prev_purchase, order_purchase_timestamp) = 0 
+                    THEN 1 ELSE 0 END)
+                    / SUM(CASE WHEN order_num = 2 THEN 1 ELSE 0 END), 1) AS pct_same_day_second_orders,
+    ROUND(COUNT(DISTINCT CASE WHEN order_num = 2
+                            AND date_diff('day', prev_purchase, order_purchase_timestamp) > 0
+                            THEN customer_unique_id END) * 100.0
+        / COUNT(DISTINCT customer_unique_id), 2) AS pct_later_day_orders
+FROM check_orders;
