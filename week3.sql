@@ -208,3 +208,46 @@ SELECT
 FROM ranked
 WHERE rnk = 1
 ORDER BY pct_state_revenue DESC;
+
+-- BONUS: The busiest day was November 24 with 1176 orders. 
+-- This caused the 7-day trailing average to rise from 206.57 (Nov. 23) to 346.43 (Nov. 24).
+-- 7-days after Black Friday (Dec. 1), the trailing average was still 362.57,
+-- meaning that Black Friday lifted demand for the whole following week,
+-- and saw a ~75% increase compared to pre-Black Friday level (206.57).
+-- All order statuses were included, since this measures demand.
+
+SELECT
+    date_trunc('day', order_purchase_timestamp)::DATE AS order_day,
+    COUNT(*) AS order_count
+FROM orders
+WHERE order_purchase_timestamp >= DATE '2017-11-01'
+    AND order_purchase_timestamp < DATE '2017-12-01'
+GROUP BY order_day
+ORDER BY order_count DESC
+LIMIT 1;
+
+WITH daily_orders AS (
+    SELECT
+        date_trunc('day', order_purchase_timestamp) AS order_day,
+        COUNT(*) AS order_count
+    FROM orders
+    GROUP BY order_day
+),
+daily_average AS (
+    SELECT
+        order_day,
+        order_count,
+        ROUND(AVG(order_count) OVER (
+            ORDER BY order_day
+            ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+        ), 2) AS moving_avg_7d
+    FROM daily_orders
+)
+SELECT
+    order_day::DATE AS order_day,
+    order_count,
+    moving_avg_7d
+FROM daily_average
+WHERE order_day >= DATE '2017-11-10'
+    AND order_day < DATE '2017-12-08'
+ORDER BY order_day;
