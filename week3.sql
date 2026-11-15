@@ -163,3 +163,48 @@ SELECT
                             THEN customer_unique_id END) * 100.0
         / COUNT(DISTINCT customer_unique_id), 2) AS pct_later_day_orders
 FROM check_orders;
+
+-- Q5: As the number of sellers grows, concentration falls: 100% with one seller, ~83% with 6 sellers,
+-- ~15% or less with 100+ sellers (~15% in RJ, ~3% in SP).
+-- AM, PI, MA and PA have only one seller, so 100% is automatic. 
+-- Paraiba (PB) was the most concentrated, where one seller (a6bd7d...) had ~83.4% of state revenue (among 6 sellers).
+-- In states with 100+ sellers, the most concentrated was Rio de Janeiro (RJ), 
+-- with seller (46dc3b...) having ~15.6% of the state's revenue.
+-- Sao Paulo (SP) was the state with most sellers (1769), where its top seller had ~2.7% of state revenue.
+-- Only delivered orders were chosen to calculate revenue.
+
+WITH sellers_revenue AS (
+    SELECT
+        s.seller_state,
+        s.seller_id,
+        COUNT(*) AS items_sold,
+        SUM(oi.price) AS revenue
+    FROM order_items AS oi
+    INNER JOIN sellers AS s
+        ON oi.seller_id = s.seller_id
+    INNER JOIN orders AS o 
+        ON oi.order_id = o.order_id 
+    WHERE o.order_status = 'delivered'
+    GROUP BY s.seller_state, s.seller_id
+),
+ranked AS (
+    SELECT
+        *,
+        COUNT(*) OVER (PARTITION BY seller_state) AS seller_count,
+        ROUND(100.0 * revenue / SUM(revenue) OVER (PARTITION BY seller_state), 1) AS pct_state_revenue,
+        RANK() OVER (
+            PARTITION BY seller_state
+            ORDER BY revenue DESC
+        ) AS rnk
+    FROM sellers_revenue
+)
+SELECT
+    seller_state,
+    seller_count,
+    items_sold,
+    seller_id AS top_seller_id,
+    ROUND(revenue, 2) AS revenue,
+    pct_state_revenue
+FROM ranked
+WHERE rnk = 1
+ORDER BY pct_state_revenue DESC;
